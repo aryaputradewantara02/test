@@ -1,0 +1,90 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Space Grotesk", sans-serif;
+
+  --color-primary: #ffffff;
+  --color-primary-container: #00fbfb;
+  --color-primary-fixed: #00fbfb;
+  --color-primary-fixed-dim: #00dddd;
+  
+  --color-secondary: #ebb2ff;
+  --color-secondary-container: #721199;
+  --color-secondary-fixed: #f8d8ff;
+  --color-secondary-fixed-dim: #ebb2ff;
+  
+  --color-tertiary: #ffffff;
+  --color-tertiary-container: #ffdbcb;
+  --color-tertiary-fixed: #ffdbcb;
+  --color-tertiary-fixed-dim: #ffb692;
+  
+  --color-background: #050708;
+  --color-surface: #050708;
+  --color-surface-container: #1c2021;
+  --color-surface-container-low: #181c1d;
+  --color-surface-container-high: #262b2c;
+  --color-surface-container-highest: #313537;
+  --color-surface-variant: #313537;
+  
+  --color-on-background: #e0e3e4;
+  --color-on-surface: #e0e3e4;
+  --color-on-surface-variant: #b9cac9;
+  --color-on-primary-container: #007070;
+  --color-on-secondary-container: #e299ff;
+  --color-on-tertiary-container: #a94600;
+  
+  --color-outline: #839493;
+  --color-outline-variant: #3a4a49;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-background font-body overflow-hidden;
+  }
+}
+
+@layer utilities {
+  .hud-scanline {
+    background: linear-gradient(to bottom, transparent 50%, rgba(0, 251, 251, 0.05) 50%);
+    background-size: 100% 4px;
+  }
+  
+  .grid-overlay {
+    background-image: 
+        linear-gradient(to right, rgba(0, 251, 251, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 251, 251, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .bg-glow {
+    background: radial-gradient(circle at 50% 50%, rgba(0, 251, 251, 0.15) 0%, transparent 70%);
+  }
+
+  .glass-panel {
+    @apply backdrop-blur-xl bg-surface-container-low/40;
+  }
+  
+  .glow-cyan {
+    box-shadow: 0 0 15px rgba(0, 251, 251, 0.3);
+  }
+
+  .glow-cyan-intense {
+    box-shadow: 0 0 40px rgba(0, 251, 251, 0.4);
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 25px rgba(0, 251, 251, 0.5);
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+

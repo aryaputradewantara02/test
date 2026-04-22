@@ -1,0 +1,5 @@
+{
+  "name": "INTEK Studio",
+  "description": "Tactical AI Military Uniform Simulator with high-tech HUD interface.",
+  "requestFramePermissions": ["camera"]
+}

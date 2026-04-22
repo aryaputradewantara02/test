@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Share Entity Validation
+    function isValidShare(data) {
+      return data.keys().hasAll(['id', 'imageUrl', 'createdAt']) &&
+             data.keys().size() >= 3 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.imageUrl is string && data.imageUrl.size() <= 2048 &&
+             data.createdAt == request.time;
+    }
+
+    match /shares/{shareId} {
+      // allow get/list for anyone (public scan)
+      // We apply isValidId to single gets
+      allow get: if isValidId(shareId);
+      // No blanket list allowed for security
+      allow list: if false; 
+      
+      // Allow creation if signed in (anonymous is fine for booth)
+      allow create: if isSignedIn() && isValidShare(incoming()) && incoming().id == shareId;
+      
+      // No updates or deletes allowed for simplicity/security
+      allow update, delete: if false;
+    }
+  }
+}

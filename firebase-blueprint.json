@@ -1,0 +1,21 @@
+{
+  "entities": {
+    "Share": {
+      "title": "Share",
+      "description": "Information about a shared image asset stored as base64 in Firestore.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "imageData": { "type": "string", "description": "Base64 encoded image data." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "imageData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/shares/{shareId}": {
+      "schema": "Share",
+      "description": "Publicly accessible share data for images stored in database."
+    }
+  }
+}
