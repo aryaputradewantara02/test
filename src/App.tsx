@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { 
   Camera, 
-  Settings, 
-  HelpCircle, 
   Medal, 
   Video, 
   Brain, 
@@ -32,6 +30,8 @@ import {
   MoreVertical,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   LayoutDashboard,
   Film,
   User,
@@ -39,12 +39,18 @@ import {
   Copy,
   ExternalLink,
   QrCode,
-  Globe
+  Globe,
+  AlertCircle,
+  Radio,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { GoogleGenAI } from "@google/genai";
 import { QRCodeSVG } from 'qrcode.react';
+import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
+import '@tensorflow/tfjs-backend-webgl';
+import * as tf from '@tensorflow/tfjs';
 import { db, storage, auth } from './lib/firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -53,7 +59,7 @@ import adImage from './A_D.png';
 import alImage from './A_L.png';
 import auImage from './A_U.png';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.MY_PAID_API_KEY || process.env.GEMINI_API_KEY || "" });
 
 type Step = 'START' | 'DASHBOARD' | 'CAMERA' | 'PREVIEW' | 'UNIFORM' | 'CATEGORY' | 'STYLE' | 'PROCESSING' | 'RESULT' | 'ERROR' | 'SHARE_VIEW';
 
@@ -233,17 +239,17 @@ const STYLES = [
     thumbnail: 'https://lh3.googleusercontent.com/d/1KXQd2dJ-SLq6zVDEwU7L2DWjrZZhRyPb'
   },
   {
-    id: 'cinematic-active-warzone',
-    name: 'ACTIVE WARZONE',
-    subtitle: 'URBAN FRONT',
-    description: 'Intense urban warzone with armored vehicles and fighter jets. Dramatic battlefield atmosphere with explosions and smoke.',
-    aiPrompt: 'Hyper-realistic cinematic digital illustration of an active warzone in a ruined city. Shot with a wide-angle lens and deep focus. Dramatic lighting pierces heavy volumetric dust, smoke, and a massive fiery explosion. Features advancing armored military vehicles with glowing headlights and low-flying fighter jets leaving missile trails. A platoon of heavily armed soldiers in tactical gear marches forward through rubble-strewn muddy roads. Unreal Engine 5 render with hyper-detailed textures and film grain.',
-    icon: Bomb,
-    assetId: 'ADV-009-WARZONE',
-    tags: ['WARZONE', 'URBAN', 'EXPLOSION'],
+    id: 'cinematic-subterranean-combat',
+    name: 'SUBTERRANEAN COMBAT',
+    subtitle: 'URBAN TACTICAL',
+    description: 'Dark, claustrophobic subterranean combat in subway tunnels with teal and blue lighting.',
+    aiPrompt: 'A hyper-realistic, 8k, highly detailed cinematic film still, 50mm lens, slight Dutch angle, capturing the rugged Caucasian operative (consistent face reference) navigating dark, claustrophobic subterranean subway tunnels. He is wearing dark urban tactical gear and is engaged in close-quarters combat. Suppressed pistol and combat knife drawn, facing an enemy in the dim, cool-toned teal and blue lighting. Grimy, wet concrete walls, debris. Lighting comes from distant, flickering lights and a headlamp, creating dramatic volumetric dust and deep shadows. Moody, tense atmosphere. Medium shot with focus on his eyes and the texture of his gear. in 9:16.',
+    icon: Target,
+    assetId: 'ADV-011-SUBWAY',
+    tags: ['URBAN', 'TACTICAL', 'CQB'],
     category: 'cinematic',
-    image: 'https://picsum.photos/seed/warzone-tactical/800/1000',
-    thumbnail: 'https://lh3.googleusercontent.com/d/1iAm5V3cAsVGvGVW68RJhr-U2__ux9Yd2'
+    image: 'https://picsum.photos/seed/subway-tactical/800/1000',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1i-0D-nacZPccKgT9QWifNjCa2ccryg_L'
   },
   {
     id: 'cinematic-industrial-breach',
@@ -283,6 +289,110 @@ const STYLES = [
     category: 'cinematic',
     image: 'https://picsum.photos/seed/winter-tactical/800/1000',
     thumbnail: 'https://lh3.googleusercontent.com/d/1HTrRvbDkBcW817an0sCOMxxp0_2TC6YU'
+  },
+  {
+    id: 'cinematic-jammer-fortuner',
+    name: 'JAMMER FORTUNER',
+    subtitle: 'TACTICAL INTERCEPTION',
+    description: 'High-tech jamming operation with Fortuner vehicle, electronic signals, and tactical deployment.',
+    icon: Zap,
+    assetId: 'ADV-014-JAMMER',
+    tags: ['VEHICLE', 'TACTICAL', 'JAMMER'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/1Uz_3fD3vzZOcH4y1KcCtLWgqI0VvjNOr',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1Uz_3fD3vzZOcH4y1KcCtLWgqI0VvjNOr',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, zero blur. MANDATORY: Use the reference image as the absolute base. Keep the background, Fortuner, and antennas UNCHANGED. POSITION & POSE: The user MUST BE LEANING against the side of the vehicle, positioned slightly FORWARD toward the rear passenger door, ensuring the OPEN TRUNK (bagasi) is FULLY VISIBLE and NOT OBSCURED by the human subject. Replicate the leaning pose but shifted forward to preserve the view of the electronic gear in the back. SCALE & PROPORTION: 1:1 NATURAL SCALE. GEAR: Tactical Tiger Stripe camouflage uniform with black tactical vest. NATURAL BLENDING: Seamless face-to-body unification. Match skin tones, shadows, and environment lighting wrap perfectly. High-fidelity rendering, 8k.'
+  },
+  {
+    id: 'cinematic-korlantas',
+    name: 'KORLANTAS TACTICAL',
+    subtitle: 'HIGHWAY INTERCEPTION',
+    description: 'Elite Korlantas traffic police unit with specialized patrol vehicle and tactical highway gear.',
+    icon: Shield,
+    assetId: 'ADV-015-KORLANTAS',
+    tags: ['POLICE', 'VEHICLE', 'KORLANTAS'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/1RM3Z-KLHB5yDJxV8m1EWr4_Aqbe9eYgL',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1RM3Z-KLHB5yDJxV8m1EWr4_Aqbe9eYgL',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the Korlantas reference image as the base. Keep the background and Korlantas vehicle UNCHANGED. POSITION & POSE: The user (locked to identity) MUST STAND to the LEFT of the vehicle, shifted FURTHER LEFT beyond the rear tire area to ensure a clear view of the car side. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio), wearing Indonesian Korlantas tactical uniform. NATURAL BLENDING: Seamless face-to-body transfer, matching shadows and lighting perfectly to the highway environment.'
+  },
+  {
+    id: 'cinematic-cbrn',
+    name: 'CBRN TACTICAL',
+    subtitle: 'HAZARDOUS RESPONSE',
+    description: 'Specialized CBRN unit equipped for chemical and biological threat mitigation in contaminated zones.',
+    icon: ShieldAlert,
+    assetId: 'ADV-016-CBRN',
+    tags: ['CBRN', 'TACTICAL', 'HAZMAT'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/1ZWlqk84QQO9RS0V_ZuGVMt4Qul4--ozr',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1ZWlqk84QQO9RS0V_ZuGVMt4Qul4--ozr',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the CBRN reference image as the absolute base. Keep the background and CBRN vehicle/equipment UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the LEFT SIDE of the FRONT TIRE of the vehicle. This position is STATIC and MUST NOT change. The user should be wearing the Indonesian CBRN tactical suit but WITHOUT any gas mask or headgear, ensuring the face and hair are fully visible and unobstructed. Integration must use 1:1 NATURAL SCALE. NATURAL BLENDING: Seamless head-to-body unification. Match shadows and toxic environment lighting perfectly to the exposed face and hair.'
+  },
+  {
+    id: 'cinematic-next-g',
+    name: 'NEXT-G TACTICAL',
+    subtitle: 'FUTURE WARFARE',
+    description: 'Next-generation tactical unit featuring advanced experimental armor and high-tech scouting vehicle.',
+    icon: Wand2,
+    assetId: 'ADV-017-NEXTG',
+    tags: ['FUTURE', 'TACTICAL', 'EXPERIMENTAL'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/16trJIEHaSaqjvJfpqwdepROWlN-DYoIf',
+    thumbnail: 'https://lh3.googleusercontent.com/d/16trJIEHaSaqjvJfpqwdepROWlN-DYoIf',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the NEXT-G reference image as the absolute base. Keep the background and the specialized vehicle/equipment UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the LEFT SIDE of the REAR TIRE of the vehicle. This position is STATIC and MUST NOT change. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio). The user should be wearing a minimalist tech wear style tactical uniform (sleek, functional, modern). NATURAL BLENDING: Seamless face-to-body unification. Match shadows and the crisp, clean futuristic lighting environment perfectly.'
+  },
+  {
+    id: 'cinematic-pdn',
+    name: 'PDN TACTICAL',
+    subtitle: 'NATION DATA DEFENSE',
+    description: 'Elite security forces specialized in strategic asset protection and national data center perimeter defense.',
+    icon: Shield,
+    assetId: 'ADV-018-PDN',
+    tags: ['DATA', 'TACTICAL', 'SECURITY'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/17CRCdJ1V19U5zTXsoE_zLgtajz15mJ0T',
+    thumbnail: 'https://lh3.googleusercontent.com/d/17CRCdJ1V19U5zTXsoE_zLgtajz15mJ0T',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the PDN reference image as the absolute base. Keep the background and the specialized equipment/server environment UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the RIGHT SIDE of the REAR TIRE of the vehicle. This position is STATIC and MUST NOT change. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio). The user should be wearing a clean, high-tech tactical uniform fitting for Indonesian National Data security. NATURAL BLENDING: Seamless face-to-body unification. Match shadows and the crisp, technological lighting environment perfectly.'
+  },
+  {
+    id: 'cinematic-rapid-response',
+    name: 'RAPID RESPONSE',
+    subtitle: 'EMERGENCY MOBILITY',
+    description: 'High-speed tactical response unit designed for immediate deployment and extreme urban agility.',
+    icon: Zap,
+    assetId: 'ADV-019-RAPID',
+    tags: ['RAPID', 'TACTICAL', 'VEHICLE'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/1Ts9O80gjqr7WbMz3jfKkoQ8SktkBPhQt',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1Ts9O80gjqr7WbMz3jfKkoQ8SktkBPhQt',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the Rapid Response reference image as the absolute base. Keep the background and the specialized vehicle/equipment UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the LEFT SIDE of the REAR TIRE of the vehicle. This position is STATIC and MUST NOT change. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio). The user should be wearing a high-performance tactical uniform suitable for rapid emergency response. NATURAL BLENDING: Seamless face-to-body unification. Match shadows and the dynamic, outdoor lighting environment perfectly.'
+  },
+  {
+    id: 'cinematic-hiace-antidrone',
+    name: 'HIACE ANTIDRONE',
+    subtitle: 'AIRSPACE DEFENSE',
+    description: 'Mobile electronic warfare unit equipped with long-range antidrone jamming systems and tactical surveillance.',
+    icon: Radio,
+    assetId: 'ADV-020-HIACE',
+    tags: ['ANTIDRONE', 'TACTICAL', 'ELECTRONIC'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/1XJgNAfaWzYVyynb7yo-YTitI4Xr0WZU6',
+    thumbnail: 'https://lh3.googleusercontent.com/d/1XJgNAfaWzYVyynb7yo-YTitI4Xr0WZU6',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the Hiace Antidrone reference image as the absolute base. Keep the background and the specialized vehicle/antidrone equipment UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the LEFT SIDE of the FRONT TIRE of the vehicle. This position is STATIC and MUST NOT change. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio). The user should be wearing a specialized Indonesian technical tactical uniform. NATURAL BLENDING: Seamless face-to-body unification. Match shadows and the technical environment lighting perfectly.'
+  },
+  {
+    id: 'cinematic-xplorer',
+    name: 'XPLORER TACTICAL',
+    subtitle: 'TERRAIN DOMINANCE',
+    description: 'All-terrain tactical reconnaissance unit designed for extreme environment exploration and perimeter scouting.',
+    icon: Compass,
+    assetId: 'ADV-021-XPLORER',
+    tags: ['XPLORER', 'TACTICAL', 'TERRAIN'],
+    category: 'cinematic',
+    image: 'https://lh3.googleusercontent.com/d/18WDnBktT0dVu7H6jOutaz3O-B9qc2swz',
+    thumbnail: 'https://lh3.googleusercontent.com/d/18WDnBktT0dVu7H6jOutaz3O-B9qc2swz',
+    aiPrompt: 'Photorealistic integration. ULTRA-HD QUALITY: Sharp focus, 8k textures. MANDATORY: Use the Xplorer Tactical reference image as the absolute base. Keep the background and the specialized all-terrain vehicle UNCHANGED. POSITION & POSE: The user (locked to identity) MUST ALWAYS be standing EXACTLY to the LEFT SIDE of the REAR TIRE of the vehicle. This position is STATIC and MUST NOT change. Integration must use 1:1 NATURAL SCALE (matching real-world human-to-vehicle height ratio). The user should be wearing a rugged, high-tech explorer tactical uniform. NATURAL BLENDING: Seamless face-to-body unification. Match shadows and the natural outdoor lighting environment perfectly.'
   }
 ];
 
@@ -305,12 +415,50 @@ export default function App() {
   const [isCopied, setIsCopied] = useState(false);
   const [isLiveFeedOpen, setIsLiveFeedOpen] = useState(true);
   const [navigationIntent, setNavigationIntent] = useState<'tactical' | 'cinematic' | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(60);
   const [photoTimer, setPhotoTimer] = useState<number | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isGestureDetected, setIsGestureDetected] = useState(false);
+  const [handDetector, setHandDetector] = useState<any>(null);
+  const [handPoint, setHandPoint] = useState<{ x: number, y: number } | null>(null);
   
+  const isCountdownRunning = useRef(false);
+  const gestureFramesCount = useRef(0); // To track how many consecutive frames the gesture is held
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const detectorRef = useRef<any>(null);
+
+  useEffect(() => {
+    const initDetector = async () => {
+      try {
+        console.log("Initializing Hand Detector...");
+        // Prefer WebGL for performance
+        try {
+          await tf.setBackend('webgl');
+        } catch (e) {
+          console.warn("WebGL not supported, falling back to CPU");
+          await tf.setBackend('cpu');
+        }
+        await tf.ready();
+        
+        const model = handPoseDetection.SupportedModels.MediaPipeHands;
+        const detectorConfig: any = {
+          runtime: 'tfjs',
+          modelType: 'lite',
+          maxHands: 2,
+        };
+        const detector = await handPoseDetection.createDetector(model, detectorConfig);
+        detectorRef.current = detector;
+        setHandDetector(detector);
+        console.log("Hand detector initialized successfully on backend:", tf.getBackend());
+      } catch (err) {
+        console.error("Failed to initialize hand detector:", err);
+      }
+    };
+    initDetector();
+  }, []);
 
   const startCamera = async () => {
     try {
@@ -331,13 +479,18 @@ export default function App() {
   };
 
   const takePhoto = () => {
-    if (photoTimer !== null) return;
+    // SYNCHRONOUS REF LOCK: Instantly block any further calls
+    if (isCountdownRunning.current) return;
     
+    isCountdownRunning.current = true;
     setPhotoTimer(5);
   };
 
   useEffect(() => {
-    if (photoTimer === null) return;
+    if (photoTimer === null) {
+      isCountdownRunning.current = false;
+      return;
+    }
 
     if (photoTimer === 0) {
       // Actually take the photo
@@ -483,6 +636,131 @@ export default function App() {
     }
     return () => stopCamera();
   }, [step]);
+
+  // Hand Gesture Tracking Loop
+  useEffect(() => {
+    let animationFrameId: number;
+    let lastExecutedTime = 0;
+    const FRAME_INTERVAL = 60; // Slightly faster (approx 15 FPS)
+
+    const detectGesture = async () => {
+      if (step !== 'CAMERA' || !detectorRef.current || !videoRef.current || videoRef.current.readyState < 2) {
+        if (handPoint !== null) setHandPoint(null);
+        if (isGestureDetected) setIsGestureDetected(false);
+        gestureFramesCount.current = 0;
+        animationFrameId = requestAnimationFrame(detectGesture);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastExecutedTime < FRAME_INTERVAL) {
+        animationFrameId = requestAnimationFrame(detectGesture);
+        return;
+      }
+      lastExecutedTime = now;
+
+      try {
+        const pixels = tf.browser.fromPixels(videoRef.current);
+        const hands = await detectorRef.current.estimateHands(pixels, { flipHorizontal: false });
+        pixels.dispose();
+        
+        if (hands && hands.length > 0) {
+          const hand = hands[0];
+          
+          // CRITICAL: High confidence check (Skip if AI is not 85%+ sure)
+          if (hand.score < 0.85) {
+            setHandPoint(null);
+            setIsGestureDetected(false);
+            gestureFramesCount.current = 0;
+            animationFrameId = requestAnimationFrame(detectGesture);
+            return;
+          }
+
+          const keypoints = hand.keypoints;
+          const indexTip = keypoints[8];
+          const wrist = keypoints[0];
+
+          if (videoRef.current) {
+            const videoWidth = videoRef.current.videoWidth;
+            const videoHeight = videoRef.current.videoHeight;
+            setHandPoint({
+              x: (1 - indexTip.x / videoWidth) * 100,
+              y: (indexTip.y / videoHeight) * 100
+            });
+          }
+
+          // STRICT GESTURE: Logic for Thumbs Down and Palm
+          const getDist = (p1: any, p2: any) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+          
+          const fingers = [
+            { tip: 4, base: 2 },   // Thumb
+            { tip: 8, base: 5 },   // Index
+            { tip: 12, base: 9 },  // Middle
+            { tip: 16, base: 13 }, // Ring
+            { tip: 20, base: 17 }  // Pinky
+          ];
+
+          // 1. THUMBS DOWN GESTURE (CANCEL)
+          const thumbTip = keypoints[4];
+          const thumbBase = keypoints[2];
+          const isThumbDown = thumbTip.y > thumbBase.y + 15;
+          
+          let curledCount = 0;
+          for (let i = 1; i < 5; i++) {
+            const tipDist = getDist(keypoints[fingers[i].tip], wrist);
+            const baseDist = getDist(keypoints[fingers[i].base], wrist);
+            if (tipDist < baseDist * 1.1) curledCount++;
+          }
+
+          if (isCountdownRunning.current && isThumbDown && curledCount >= 3) {
+            setPhotoTimer(null);
+            setIsGestureDetected(false);
+            gestureFramesCount.current = 0;
+          } 
+          // 2. PALM GESTURE (START)
+          else {
+            let extendedCount = 0;
+            fingers.forEach((f, idx) => {
+              const tipDist = getDist(keypoints[f.tip], wrist);
+              const baseDist = getDist(keypoints[f.base], wrist);
+              if (tipDist > baseDist * 1.25) extendedCount++;
+            });
+
+            if (!isCountdownRunning.current && extendedCount >= 4) {
+              gestureFramesCount.current += 1;
+              if (gestureFramesCount.current >= 6) {
+                setIsGestureDetected(true);
+                takePhoto();
+                gestureFramesCount.current = 0;
+              }
+            } 
+            else {
+              setIsGestureDetected(false);
+              gestureFramesCount.current = 0;
+            }
+          }
+        } else {
+          setHandPoint(null);
+          setIsGestureDetected(false);
+          gestureFramesCount.current = 0;
+        }
+      } catch (err) {
+        console.error("Gesture detection error:", err);
+      }
+
+      animationFrameId = requestAnimationFrame(detectGesture);
+    };
+
+    if (step === 'CAMERA' && handDetector) {
+      detectGesture();
+    }
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [step, handDetector]); // Removed photoTimer from dependency to prevent re-starting loop every second
 
   const processImageWithAI = async () => {
     if (!capturedImage) return;
@@ -680,11 +958,74 @@ export default function App() {
                   <span className="font-label text-xs tracking-widest text-primary-container uppercase">
                     {step === 'CAMERA' ? 'CAMERA ACTIVE' : ''}
                   </span>
+                  {step === 'CAMERA' && (navigationIntent === 'tactical' || navigationIntent === 'cinematic') && (
+                    <div className="relative flex items-center h-full">
+                      <div className="w-[1px] h-4 bg-white/10 mx-2"></div>
+                      <button 
+                        onClick={() => setShowInfo(!showInfo)}
+                        className={cn(
+                          "flex items-center gap-2.5 px-4 py-1.5 rounded-sm border transition-all duration-300",
+                          showInfo 
+                            ? "bg-primary-container/20 border-primary-container text-white shadow-[0_0_10px_rgba(0,255,255,0.2)]" 
+                            : "bg-white/5 border-white/10 text-primary-fixed-dim hover:bg-white/10 hover:border-white/30"
+                        )}
+                      >
+                        <AlertCircle className="w-6 h-6" />
+                        <span className="text-[13px] font-headline tracking-[0.2em] uppercase">SYSTEM INFO</span>
+                      </button>
+                      
+                      <AnimatePresence>
+                        {showInfo && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                            className="absolute top-full mt-4 right-0 w-72 p-5 glass-panel border border-primary-container/30 bg-surface-container-highest/90 z-[100] shadow-2xl backdrop-blur-xl"
+                          >
+                            <div className="absolute -top-2 right-12 w-4 h-4 bg-surface-container-highest rotate-45 border-l border-t border-primary-container/30"></div>
+                                                  <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+                              <Target className="w-4 h-4 text-primary-container" />
+                              <span className="text-xs font-headline text-white tracking-[0.2em] uppercase italic">OPERATIONAL PROTOCOL</span>
+                            </div>
+                            
+                            <div className="space-y-4">
+                              <div className="flex gap-3">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-primary-container"></div>
+                                <p className="text-base text-on-surface-variant font-mono leading-relaxed">
+                                  Posisikan badan Anda sesuai dengan outline yang berwarna putih.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-primary-container animate-pulse"></div>
+                                <p className="text-base text-white font-mono leading-relaxed">
+                                  Tampilkan telapak tangan Anda untuk memulai foto tanpa harus menekan <span className="text-primary-container font-black underline">"TAKE PHOTO"</span>.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
+                                <p className="text-base text-white font-mono leading-relaxed">
+                                  Tunjukkan jempol ke bawah (thumbs down) untuk membatalkan hitungan mundur.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
+                              <span className="text-[10px] font-label text-white/30 tracking-[0.2em] uppercase">Bio-Metric Lock v.4.2</span>
+                              <button 
+                                onClick={() => setShowInfo(false)}
+                                className="text-[11px] font-headline text-primary-container underline underline-offset-4 hover:text-white transition-colors"
+                              >
+                                DISMISS
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex gap-4">
-                <Settings className="w-6 h-6 text-primary-fixed-dim cursor-pointer hover:text-white transition-colors" />
-                <HelpCircle className="w-6 h-6 text-primary-fixed-dim cursor-pointer hover:text-white transition-colors" />
               </div>
             </div>
           </>
@@ -694,98 +1035,114 @@ export default function App() {
 
       {/* Side Navigation */}
       {!['START', 'SHARE_VIEW'].includes(step) && (
-        <aside className={cn(
-          "fixed left-0 top-0 h-full z-[70] hidden md:flex flex-col py-8 bg-surface/95 backdrop-blur-2xl w-64 border-r border-white/5 shadow-[10px_0_40px_rgba(0,0,0,0.7)] transition-transform duration-700 ease-in-out px-4",
-          "translate-x-0"
-        )}>
-        <div 
-          onClick={() => {
-            setStep('START');
-            setNavigationIntent(null);
-          }}
-          className="mb-14 px-4 flex items-stretch gap-3 hover:opacity-80 transition-opacity cursor-pointer group pointer-events-auto"
-        >
-          {/* Vertical Accent Line */}
-          <div className="w-[1.5px] bg-primary-container shadow-[0_0_8px_rgba(0,255,255,0.6)] self-stretch rounded-full" />
-          
-          <div className="flex flex-col">
-            <span className="text-white font-black font-headline text-xl tracking-wider uppercase leading-none drop-shadow-[0_0_1px_rgba(0,255,255,0.5)]">INTEK</span>
-            <span className="text-[10px] text-primary-container/90 font-medium tracking-[0.4em] lowercase mt-1.5">studio</span>
-          </div>
-        </div>
+        <>
+          {/* Toggle Button for Mobile/Desktop when closed */}
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className={cn(
+              "fixed top-8 z-[80] p-2 bg-surface-container-highest/80 backdrop-blur-md border border-white/10 rounded-full text-primary-container shadow-xl transition-all duration-500 hover:scale-110 active:scale-95 group",
+              isSidebarOpen ? "left-[240px]" : "left-6"
+            )}
+            title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          >
+            {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5 flex md:hidden lg:flex" />}
+            {!isSidebarOpen && <Menu className="w-5 h-5 md:block lg:hidden" />}
+          </button>
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
-          <NavItem 
-            icon={LayoutDashboard} 
-            label="DASHBOARD" 
-            active={step === 'DASHBOARD' || step === 'RESULT'} 
-            onClick={() => setStep('DASHBOARD')} 
-          />
-          
-          <div className="py-4 px-4">
-            <div className="h-px bg-white/5 w-full"></div>
-          </div>
-
-          <div className="space-y-1">
-            <button 
-              onClick={() => setIsLiveFeedOpen(!isLiveFeedOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 text-on-surface-variant hover:text-white transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <Video className="w-5 h-5 opacity-60 group-hover:opacity-100" />
-                <span className="font-headline text-xs font-bold tracking-widest uppercase">LIVE FEED</span>
+          <aside className={cn(
+            "fixed left-0 top-0 h-full z-[70] flex flex-col py-8 bg-surface/95 backdrop-blur-2xl border-r border-white/5 shadow-[10px_0_40px_rgba(0,0,0,0.7)] transition-all duration-700 ease-in-out px-4",
+            isSidebarOpen ? "w-64 translate-x-0" : "w-0 -translate-x-full pointer-events-none"
+          )}>
+            <div className={cn("transition-opacity duration-300", !isSidebarOpen && "opacity-0 invisible")}>
+              <div 
+                onClick={() => {
+                  setStep('START');
+                  setNavigationIntent(null);
+                }}
+                className="mb-14 px-4 flex items-stretch gap-3 hover:opacity-80 transition-opacity cursor-pointer group pointer-events-auto"
+              >
+                {/* Vertical Accent Line */}
+                <div className="w-[1.5px] bg-primary-container shadow-[0_0_8px_rgba(0,255,255,0.6)] self-stretch rounded-full" />
+                
+                <div className="flex flex-col">
+                  <span className="text-white font-black font-headline text-2xl tracking-wider uppercase leading-none drop-shadow-[0_0_1px_rgba(0,255,255,0.5)]">INTEK</span>
+                  <span className="text-sm text-primary-container/90 font-medium tracking-[0.4em] lowercase mt-1.5">studio</span>
+                </div>
               </div>
-              {isLiveFeedOpen ? <ChevronUp className="w-4 h-4 opacity-40" /> : <ChevronDown className="w-4 h-4 opacity-40" />}
-            </button>
 
-            <AnimatePresence>
-              {isLiveFeedOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden space-y-1 ml-4"
-                >
-                  <NavItem 
-                    icon={Shield} 
-                    label="TACTICAL UNIFORM" 
-                    active={navigationIntent === 'tactical' && (step === 'CAMERA' || step === 'UNIFORM')} 
-                    onClick={() => {
-                      setNavigationIntent('tactical');
-                      setStep('CAMERA');
-                    }} 
-                    isSubItem
-                  />
-                  <NavItem 
-                    icon={Film} 
-                    label="CINEMATIC AI" 
-                    active={navigationIntent === 'cinematic' && (step === 'CAMERA' || step === 'STYLE')} 
-                    onClick={() => {
-                      setNavigationIntent('cinematic');
-                      setStep('CAMERA');
-                    }} 
-                    isSubItem
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+              <nav className="flex-1 px-4 space-y-2 overflow-y-auto no-scrollbar">
+                <NavItem 
+                  icon={LayoutDashboard} 
+                  label="DASHBOARD" 
+                  active={step === 'DASHBOARD' || step === 'RESULT'} 
+                  onClick={() => setStep('DASHBOARD')} 
+                />
+                
+                <div className="py-4 px-4">
+                  <div className="h-px bg-white/5 w-full"></div>
+                </div>
 
-        </nav>
+                <div className="space-y-1">
+                  <button 
+                    onClick={() => setIsLiveFeedOpen(!isLiveFeedOpen)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-on-surface-variant hover:text-white transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Video className="w-5 h-5 opacity-60 group-hover:opacity-100" />
+                      <span className="font-headline text-base font-bold tracking-widest uppercase">LIVE FEED</span>
+                    </div>
+                    {isLiveFeedOpen ? <ChevronUp className="w-4 h-4 opacity-40" /> : <ChevronDown className="w-4 h-4 opacity-40" />}
+                  </button>
 
-        <div className="mt-auto px-4 w-full">
-          <div className="flex items-center gap-3 py-6 border-t border-white/5">
-            <div className="w-2 h-2 rounded-full bg-primary-container animate-pulse shadow-[0_0_8px_rgba(0,255,255,1)]"></div>
-            <span className="font-label text-[10px] tracking-widest text-primary-container uppercase font-bold">OPERATOR ACTIVE</span>
-          </div>
-        </div>
-      </aside>
+                  <AnimatePresence>
+                    {isLiveFeedOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-1 ml-4"
+                      >
+                        <NavItem 
+                          icon={Shield} 
+                          label="TACTICAL UNIFORM" 
+                          active={navigationIntent === 'tactical' && (step === 'CAMERA' || step === 'UNIFORM')} 
+                          onClick={() => {
+                            setNavigationIntent('tactical');
+                            setStep('CAMERA');
+                          }} 
+                          isSubItem
+                        />
+                        <NavItem 
+                          icon={Film} 
+                          label="CINEMATIC AI" 
+                          active={navigationIntent === 'cinematic' && (step === 'CAMERA' || step === 'STYLE')} 
+                          onClick={() => {
+                            setNavigationIntent('cinematic');
+                            setStep('CAMERA');
+                          }} 
+                          isSubItem
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </nav>
+
+              <div className="mt-auto px-4 w-full">
+                <div className="flex items-center gap-3 py-6 border-t border-white/5">
+                  <div className="w-2 h-2 rounded-full bg-primary-container animate-pulse shadow-[0_0_8px_rgba(0,255,255,1)]"></div>
+                  <span className="font-label text-sm tracking-widest text-primary-container uppercase font-bold">OPERATOR ACTIVE</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </>
       )}
 
       {/* Main Content Area */}
       <main className={cn(
         "relative h-full w-full flex items-center justify-center z-10 transition-all duration-700 ease-in-out",
-        !['START', 'SHARE_VIEW'].includes(step) && "md:pl-64"
+        !['START', 'SHARE_VIEW'].includes(step) && (isSidebarOpen ? "md:pl-64" : "md:pl-0")
       )}>
         <AnimatePresence mode="wait">
           {(step === 'START' || step === 'DASHBOARD') && (
@@ -864,6 +1221,24 @@ export default function App() {
                 className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
               />
               <canvas ref={canvasRef} className="hidden" />
+
+              {/* Hand Tracking Marker */}
+              {handPoint && (
+                <div 
+                  className="absolute z-[100] w-4 h-4 pointer-events-none"
+                  style={{ 
+                    left: `${handPoint.x}%`, 
+                    top: `${handPoint.y}%`,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  <div className="absolute inset-0 bg-primary-container rounded-full animate-ping opacity-60"></div>
+                  <div className="absolute inset-1 bg-primary-container rounded-full shadow-[0_0_10px_rgba(0,255,255,1)]"></div>
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-headline text-primary-container font-black tracking-widest drop-shadow-md">
+                    TRACKING_ACTIVE
+                  </div>
+                </div>
+              )}
               
               {/* Viewfinder HUD */}
               <div className="relative w-[90%] h-[80%] max-w-5xl max-h-[700px] pointer-events-none">
@@ -893,54 +1268,67 @@ export default function App() {
                 {/* Flexible Neural Safe Zone Guide */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full max-w-lg max-h-[600px] flex flex-col items-center justify-start pt-12">
-                    {/* Head & Shoulder Focus (Ensure Face HD) */}
-                    <div className="w-24 h-28 rounded-[40%] border border-primary-container/30 relative">
-                       <div className="absolute -bottom-2 -left-4 w-32 h-12 border-t border-x rounded-t-3xl border-primary-container/20"></div>
-                       {/* Face crosshair */}
-                       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-1">
-                         <div className="w-1 h-[1px] bg-primary-container/40"></div>
-                         <div className="w-1 h-[1px] bg-primary-container/40"></div>
-                       </div>
+                    {/* Head & Shoulder Focus (Ensure Face HD) - Separated Head and Body */}
+                    <div className="flex flex-col items-center gap-4">
+                      {/* Head Guide */}
+                      <div className="w-24 h-28 rounded-[45%] border-4 border-white relative shadow-[0_0_15px_rgba(255,255,255,0.5)]">
+                         {/* Face crosshair */}
+                         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-1">
+                           <div className="w-3 h-[4px] bg-white"></div>
+                           <div className="w-3 h-[4px] bg-white"></div>
+                         </div>
+                      </div>
+                      
+                      {/* Shoulder/Body Guide */}
+                      <div className="w-56 h-48 border-t-4 border-x-4 rounded-t-[3rem] border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]"></div>
                     </div>
 
                     {/* Safe Zone Brackets */}
                     <div className="absolute inset-0 flex flex-col justify-between p-4 opacity-40">
                       <div className="flex justify-between">
-                        <div className="w-8 h-8 border-t-2 border-l-2 border-primary-container"></div>
-                        <div className="w-8 h-8 border-t-2 border-r-2 border-primary-container"></div>
+                        <div className="w-8 h-8 border-t-4 border-l-4 border-primary-container"></div>
+                        <div className="w-8 h-8 border-t-4 border-r-4 border-primary-container"></div>
                       </div>
                       
                       {/* Dynamic Scanning Line */}
                       <motion.div 
                         animate={{ top: ['20%', '80%', '20%'] }}
                         transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                        className="absolute left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary-container/40 to-transparent z-0"
+                        className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary-container to-transparent z-0"
                       />
 
                       <div className="flex justify-between">
-                        <div className="w-8 h-8 border-b-2 border-l-2 border-primary-container"></div>
-                        <div className="w-8 h-8 border-b-2 border-r-2 border-primary-container"></div>
+                        <div className="w-8 h-8 border-b-4 border-l-4 border-primary-container"></div>
+                        <div className="w-8 h-8 border-b-4 border-r-4 border-primary-container"></div>
                       </div>
                     </div>
 
                     {/* Guidance Text */}
-                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 text-center">
-                      <span className="text-[8px] font-label tracking-[0.4em] text-primary-container/60 uppercase">
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 text-center flex flex-col items-center gap-2">
+                      {/* Hide hand status info during countdown for aesthetics */}
+                      {photoTimer === null && (
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full transition-colors duration-300",
+                            handDetector ? (isGestureDetected ? "bg-primary-container shadow-[0_0_8px_rgba(0,255,255,1)]" : "bg-primary-container/40") : "bg-red-500/40"
+                          )}></div>
+                          <span className={cn(
+                            "text-sm font-label tracking-[0.3em] uppercase transition-colors duration-300",
+                            isGestureDetected ? "text-primary-container" : "text-primary-container/40"
+                          )}>
+                            {handDetector ? (isGestureDetected ? "GESTURE DETECTED : INITIATING" : "HAND GESTURE READY") : "INITIALIZING NEURAL TRACKING..."}
+                          </span>
+                        </div>
+                      )}
+                      <span className="text-sm font-label tracking-[0.4em] text-primary-container/60 uppercase">
                         NEURAL SAFE ZONE : POSITION BODY WITHIN BRACKETS
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Data Readouts */}
-                <div className="absolute top-4 left-4 font-label text-[9px] tracking-tighter text-primary-container/60 uppercase leading-relaxed">
-                  REC: 00:00:00:00<br />
-                  ISO: 800 | 1/60s | F2.8
-                </div>
-                <div className="absolute bottom-4 right-4 font-label text-[9px] tracking-widest text-primary-container/60 text-right uppercase leading-relaxed">
-                  LAT: 34.0522 N<br />
-                  LONG: 118.2437 W
-                </div>
+                {/* Data Readouts - Removed REC and ISO as requested */}
+
               </div>
 
               {/* Bottom Controls Bar */}
@@ -1013,14 +1401,6 @@ export default function App() {
                 <div className="absolute bottom-0 left-0 w-16 h-16 border-b border-l border-primary-container/40"></div>
                 <div className="absolute bottom-0 right-0 w-16 h-16 border-b border-r border-primary-container/40"></div>
                 
-                <div className="absolute top-4 left-4 font-label text-[9px] tracking-tighter text-primary-container/60 uppercase leading-relaxed">
-                  REC: 00:00:00:00<br />
-                  ISO: 800 | 1/60s | F2.8
-                </div>
-                <div className="absolute bottom-4 right-4 font-label text-[9px] tracking-widest text-primary-container/60 text-right uppercase leading-relaxed">
-                  LAT: 34.0522 N<br />
-                  LONG: 118.2437 W
-                </div>
               </div>
 
               {/* Bottom Controls Bar */}
@@ -1231,44 +1611,56 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-12 w-full max-w-md px-6"
+              className="flex flex-col items-center gap-16 w-full max-w-md px-6"
             >
-              <div className="relative w-48 h-48">
+              <div className="relative w-64 h-64">
+                {/* Image Reference: Circular Loader */}
                 <svg className="w-full h-full transform -rotate-90">
                   <circle
-                    cx="96"
-                    cy="96"
-                    r="88"
-                    stroke="currentColor"
-                    strokeWidth="4"
+                    cx="128"
+                    cy="128"
+                    r="110"
+                    stroke="#1a1a1a"
+                    strokeWidth="8"
                     fill="transparent"
-                    className="text-surface-container-highest"
                   />
                   <motion.circle
-                    cx="96"
-                    cy="96"
-                    r="88"
-                    stroke="currentColor"
-                    strokeWidth="4"
+                    cx="128"
+                    cy="128"
+                    r="110"
+                    stroke="#00ffff"
+                    strokeWidth="8"
                     fill="transparent"
-                    strokeDasharray={552.92}
-                    strokeDashoffset={552.92 - (552.92 * processingProgress) / 100}
-                    className="text-primary-container"
+                    strokeDasharray={2 * Math.PI * 110}
+                    initial={{ strokeDashoffset: 2 * Math.PI * 110 }}
+                    animate={{ strokeDashoffset: 2 * Math.PI * 110 - (2 * Math.PI * 110 * processingProgress) / 100 }}
+                    transition={{ ease: "linear", duration: 0.1 }}
+                    strokeLinecap="round"
+                    className="drop-shadow-[0_0_10px_rgba(0,255,255,0.5)]"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-4xl font-headline font-black text-white">{processingProgress}%</span>
-                  <span className="text-[10px] font-label text-primary-container tracking-widest uppercase">SYNCING</span>
+                  <span className="text-7xl font-headline font-black text-white leading-none tracking-tighter">
+                    {processingProgress}<span className="text-4xl ml-1 text-white/70">%</span>
+                  </span>
+                  <motion.span 
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    className="text-sm font-mono font-bold text-[#00ffff] tracking-[0.4em] mt-3"
+                  >
+                    SYNCING
+                  </motion.span>
                 </div>
               </div>
               
-              <div className="text-center space-y-2">
-                <h3 className="text-xl font-headline font-bold text-white uppercase tracking-widest">NEURAL SYNTHESIS</h3>
-                <p className="text-on-surface-variant text-sm font-mono h-4">
-                  {processingProgress < 30 && "ANALYZING SOURCE UNIFORM..."}
-                  {processingProgress >= 30 && processingProgress < 60 && "EXTRACTING POSE & LIGHTING..."}
-                  {processingProgress >= 60 && processingProgress < 90 && "INTEGRATING TNI ASSET..."}
-                  {processingProgress >= 90 && "FINALIZING SWAP..."}
+              <div className="text-center space-y-6">
+                <h3 className="text-3xl font-sans font-bold text-white uppercase tracking-[0.2em]">NEURAL SYNTHESIS</h3>
+                <p className="text-[#00ffff] text-sm font-mono tracking-widest h-6">
+                  {processingProgress < 20 && "INITIALIZING NEURAL LINK..."}
+                  {processingProgress >= 20 && processingProgress < 40 && "CALIBRATING TACTICAL ASSETS..."}
+                  {processingProgress >= 40 && processingProgress < 70 && "EXTRACTING UNIFORM GEOMETRY..."}
+                  {processingProgress >= 70 && processingProgress < 95 && "INTEGRATING TNI ASSET..."}
+                  {processingProgress >= 95 && "SYNTHESIS COMPLETE..."}
                 </p>
               </div>
             </motion.div>
@@ -1627,7 +2019,7 @@ function NavItem({ icon: Icon, label, active, onClick, isSubItem = false }: { ic
       
       <span className={cn(
         "font-headline font-bold uppercase tracking-widest transition-all",
-        isSubItem ? "text-[10px]" : "text-[11px]",
+        isSubItem ? "text-sm" : "text-base",
         active ? "text-primary-container" : "text-on-surface-variant group-hover:text-white"
       )}>
         {label}
